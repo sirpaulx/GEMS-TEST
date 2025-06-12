@@ -1,0 +1,7 @@
+http:
+  middlewares:
+    auth:
+      basicAuth:
+        users:
+          - "paul:$2y$05$iVlD6GVJjd4O88D9qiTRG.p1xg0QdQ6nCfdiuUD3hA27.43PANQZS"
+

@@ -1,0 +1,64 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE_NAME = "ghcr.io/sirpaulx/rad"
+  }
+
+  triggers {
+    pollSCM('H/5 * * * *')  
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        git(
+          url: 'https://github.com/sirpaulx/rad.git',    
+          branch: 'master'
+          
+        )
+      }
+    }
+
+    stage('Set Timestamp') {
+      steps {
+        script {
+          env.TIMESTAMP = sh(script: "date +%Y%m%d%H%M%S", returnStdout: true).trim()
+          env.TAG = "${env.IMAGE_NAME}:${env.TIMESTAMP}"
+        }
+      }
+    }
+
+    stage('Prepare Docker Environment') {
+      steps {
+        script {
+          sh 'sudo chmod 777 /var/run/docker.sock || true'
+          sh 'docker --version'
+        }
+      }
+    }
+
+    stage('Build and Push to GHCR') {
+      steps {
+        withCredentials([string(credentialsId: 'GHCR_PAT', variable: 'TOKEN')]) {
+          sh '''
+            echo "$TOKEN" | docker login ghcr.io -u sirpaulx --password-stdin
+
+            docker build -t $TAG -f Dockerfile .
+
+            docker push $TAG
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo " Build and push successful: $TAG"
+    }
+    failure {
+      echo " Build or push failed."
+    }
+  }
+}

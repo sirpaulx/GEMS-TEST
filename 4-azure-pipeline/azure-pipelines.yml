@@ -1,0 +1,73 @@
+trigger:
+  branches:
+    include:
+      - master
+
+variables:
+  imageName: sirpaulx/radio
+  tag: $(Build.BuildId)
+
+stages:
+  - stage: LintAndTest
+    displayName: "Lint and Test"
+    jobs:
+      - job: Lint
+        pool: 
+          name: Default
+          demands:
+          - agent.os -equals Linux
+        steps:
+          - checkout: self
+
+          # Install Node.js
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+            displayName: 'Install Node.js'
+
+          # Install HTML linter
+          - script: |
+              npm install -g htmlhint
+              htmlhint "app/**/*.html" || echo "HTML lint warnings found, but continuing..."
+            displayName: 'Lint HTML'
+
+          # Install CSS linter
+          - script: |
+              npm install -g stylelint stylelint-config-standard
+              echo '{ "extends": "stylelint-config-standard" }' > .stylelintrc.json
+              stylelint "app/**/*.css" || echo "CSS lint warnings found, but continuing..."
+            displayName: 'Lint CSS'
+
+          # # Run unit tests (add your actual test command)
+          # - script: |
+          #     npm install
+          #     npm test
+          #   displayName: 'Run Unit Tests'
+          #   workingDirectory: 'app'  # Update if your package.json is elsewhere
+
+  - stage: BuildAndPush
+    displayName: "Build and Push Docker Image"
+    dependsOn: LintAndTest
+    condition: succeeded()
+    jobs:
+      - job: DockerJob
+        pool: 
+          name: Default
+          demands:
+          - agent.os -equals Linux
+          - docker
+        steps:
+          - checkout: self
+          
+          # Build and push Docker image
+          - task: Docker@2
+            displayName: 'Build and Push to Docker Hub'
+            inputs:
+              containerRegistry: 'DockerHubServiceConnection'
+              repository: '$(imageName)'
+              command: 'buildAndPush'
+              Dockerfile: '**/Dockerfile'
+              buildContext: '.'
+              tags: |
+                $(tag)
+                latest

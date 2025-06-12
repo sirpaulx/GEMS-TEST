@@ -1,0 +1,71 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE_NAME = "ghcr.io/sirpaulx/rad"
+    DEPLOY_SERVER = "74.235.166.5"  
+    DEPLOY_USER = "devopsadmin"
+    DEPLOY_PATH = "/opt/radio-app"
+    DOMAIN = "radio.pauldevops.duckdns.org"
+  }
+
+  stages {
+    stage('Checkout Code') {
+      steps {
+        git url: 'https://github.com/sirpaulx/rad.git', branch: 'master'
+      }
+    }
+
+    stage('Set Version Tags') {
+      steps {
+        script {
+          env.TIMESTAMP = sh(script: "date +%Y%m%d%H%M%S", returnStdout: true).trim()
+          env.VERSION_TAG = "${env.IMAGE_NAME}:${env.TIMESTAMP}"
+          env.LATEST_TAG = "${env.IMAGE_NAME}:latest"
+        }
+      }
+    }
+
+    stage('Build and Push') {
+      steps {
+        withCredentials([string(credentialsId: 'GHCR_PAT', variable: 'TOKEN')]) {
+          sh """
+            echo "\$TOKEN" | docker login ghcr.io -u sirpaulx --password-stdin
+            docker build -t ${env.VERSION_TAG} -t ${env.LATEST_TAG} -f Dockerfile .
+            docker push ${env.VERSION_TAG}
+            docker push ${env.LATEST_TAG}
+            docker logout ghcr.io
+          """
+        }
+      }
+    }
+    
+    stage('Deploy to Production') {
+      steps {
+        withCredentials([
+          string(credentialsId: 'GHCR_PAT', variable: 'GHCR_TOKEN')
+        ]) {
+          sshagent(['vm-ssh-key']) {
+            sh """
+              ssh -o StrictHostKeyChecking=no ${env.DEPLOY_USER}@${env.DEPLOY_SERVER} '
+                export GHCR_TOKEN="${GHCR_TOKEN}"
+                cd ${env.DEPLOY_PATH}
+                ./deploy-radio.sh
+              '
+            """
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh "docker rmi ${env.VERSION_TAG} ${env.LATEST_TAG} || true"
+      cleanWs()
+    }
+    success {
+      echo " Deployment successful: https://${env.DOMAIN}"
+    }
+  }
+}
