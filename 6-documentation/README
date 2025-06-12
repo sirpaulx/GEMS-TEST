@@ -1,235 +1,137 @@
-# DevOps Test Project Implementation
+# DevOps Test Project
 
-## ✅ Summary
+## Summary
 
-I've built a comprehensive DevOps environment that demonstrates end-to-end infrastructure provisioning, CI/CD implementation, and security best practices. The solution includes:
-
-- 🛡️ **Hardened Linux server** (Ubuntu 22.04) on Azure VM
-- 🔄 **Traefik reverse proxy** with HTTPS via Let's Encrypt
-- ⚙️ **Jenkins CI/CD pipeline** for building and deploying containerized applications
-- 🔄 **Azure DevOps pipeline** as an alternative CI solution
-- 📦 **Containerized radio application** deployed behind Traefik
-- 🔐 **Security-first approach** at every layer
-- 📝 **Complete documentation** of the entire setup
-
-All components are integrated to demonstrate a production-ready DevOps workflow meeting all test requirements.
+This project demonstrates my ability to provision and secure a Linux server, set up Traefik as a reverse proxy with Let's Encrypt certificates, deploy Jenkins as a CI tool, and implement a full CI/CD pipeline using both Jenkins and Azure DevOps. It includes secure credential management, container builds, and automated deployment of a static NGINX site from a public GitHub repository.
 
 ---
 
-## 🔁 Reproduce Environment (Step-by-Step)
+## Reproduce Environment (Step-by-Step)
 
-### Prerequisites
-- Azure account
-- GitHub account
-- DuckDNS account (free subdomain)
+### 1. Provision and Harden a Linux Server
 
-### 1. Provision and Harden Linux Server
+* Use Azure Portal to create an Ubuntu 22.04 x64 VM.
+* Create a new non-root user with sudo access:
 
-```bash
-# Create resource group
-az group create --name DevOps-RG --location eastus
+  ```bash
+  adduser devopsadmin
+  usermod -aG sudo devopsadmin
+  ```
+* Disable root login via SSH:
 
-# Create VM (free tier eligible)
-az vm create \
-  --resource-group DevOps-RG \
-  --name DevOps-VM \
-  --image Ubuntu2204 \
-  --size Standard_B1s \
-  --admin-username devopsadmin \
-  --generate-ssh-keys \
-  --public-ip-sku Standard
+  ```bash
+  sudo nano /etc/ssh/sshd_config
+  # Set: PermitRootLogin no
+  sudo systemctl restart sshd
+  ```
+* Set up firewall with UFW:
 
-# Open ports
-az vm open-port --port 22,80,443 --resource-group DevOps-RG --name DevOps-VM
+  ```bash
+  sudo ufw allow OpenSSH
+  sudo ufw allow 80,443,8080/tcp
+  sudo ufw enable
+  ```
+* Install Docker & Docker Compose:
 
-# SSH to VM and run hardening script
-ssh -i ~/.ssh/id_rsa devopsadmin@<VM_IP>
-curl -O https://gist.githubusercontent.com/sirpaulx/.../hardening.sh
-chmod +x hardening.sh
-sudo ./hardening.sh
-```
+  ```bash
+  sudo apt update && sudo apt install -y docker.io docker-compose
+  sudo usermod -aG docker $USER && newgrp docker
+  ```
+* Reference script: [server-setup.sh](https://github.com/sirpaulx/GEMS-TEST/blob/main/1-server-setup/server-setup.sh)
 
-### 2. Set Up Traefik and Services
+### 2. Set Up Traefik and Dummy Services
 
-```bash
-# Create Traefik directory
-mkdir ~/traefik && cd ~/traefik
+* Clone the repo:
 
-# Get configuration files
-curl -O https://raw.githubusercontent.com/sirpaulx/.../docker-compose.yml
-curl -O https://raw.githubusercontent.com/sirpaulx/.../traefik.yml
+  ```bash
+  git clone https://github.com/sirpaulx/GEMS-TEST.git
+  cd GEMS-TEST/2-traefik-setup
+  ```
+* Prepare and launch services:
 
-# Set domain and start services
-export DOMAIN=yourname-devops.duckdns.org
-docker compose up -d
-```
+  ```bash
+  touch traefik/acme.json && chmod 600 traefik/acme.json
+  docker-compose up -d
+  ```
+* Includes:
 
-### 3. Jenkins Setup
+  * HTTPS via Let's Encrypt (staging)
+  * HTTP Basic Auth on one dummy service
+  * Secure Traefik Dashboard via Traefik middleware
+* Config files:
 
-```bash
-# Create Jenkins directory
-mkdir ~/jenkins && cd ~/jenkins
+  * [docker-compose.yml](https://github.com/sirpaulx/GEMS-TEST/blob/main/2-traefik-setup/docker-compose.yml)
+  * [traefik.yml](https://github.com/sirpaulx/GEMS-TEST/blob/main/2-traefik-setup/traefik/traefik.yml)
 
-# Get Jenkins compose file
-curl -O https://raw.githubusercontent.com/sirpaulx/.../docker-compose.jenkins.yml
+### 3. Jenkins CI Setup
 
-# Start Jenkins
-docker compose up -d
+* Jenkins deployed via Docker behind Traefik with HTTPS
+* Custom Jenkins Dockerfile enabled Docker-in-Docker
+* Jenkinsfile:
 
-# Access Jenkins at https://jenkins.yourname-devops.duckdns.org
-```
+  * Builds and tags Docker image from [radio app](https://github.com/sirpaulx/GEMS-TEST)
+  * Pushes image to Docker Hub
+  * Uses Jenkins Credentials Manager for authentication
+* Config files:
 
-### 4. Azure DevOps Pipeline Setup
-1. Create new pipeline in Azure DevOps
-2. Select your GitHub repository
-3. Use the provided `azure-pipelines.yml`
-4. Add Docker Hub credentials in service connections
+  * [docker-compose.yml](https://github.com/sirpaulx/GEMS-TEST/blob/main/3-jenkins-ci/docker-compose.yml)
+  * [Jenkinsfile](https://github.com/sirpaulx/GEMS-TEST/blob/main/3-jenkins-ci/Jenkinsfile)
 
-### 5. Deploy Radio Application
+### 4. Azure DevOps Pipeline
 
-```bash
-# Create app directory
-mkdir ~/radio-app && cd ~/radio-app
+* Uses same GitHub repo and radio app as Jenkins
+* Self-hosted agent configured on ARM64 Azure VM:
 
-# Get deployment script
-curl -O https://raw.githubusercontent.com/sirpaulx/.../deploy-radio.sh
-chmod +x deploy-radio.sh
+  * Dependencies installed:
 
-# Run deployment
-./deploy-radio.sh
-```
+    ```bash
+    sudo apt install libcurl4 libicu70 libkrb5-3
+    ```
+  * Correct ARM64 agent binary downloaded
+* Pipeline:
 
----
+  * Lints/tests NGINX app
+  * Builds Docker image
+  * Pushes to Docker Hub
 
-## 🏗️ Architecture Diagram
+### 5. Deploy the App
 
-```mermaid
-graph TD
-    U[End User] -->|HTTPS| T(Traefik)
-    
-    subgraph Azure VM
-        T --> J[Jenkins CI/CD]
-        T --> R[Radio App]
-        T --> W1[whoami Service]
-        T --> W2[Secure whoami]
-        T --> D[Traefik Dashboard]
-        
-        J -->|Manages| C[Docker]
-        R --> C
-        W1 --> C
-        W2 --> C
-    end
-    
-    J -->|Pulls Code| GH[GitHub Repo]
-    J -->|Pushes Images| GR[GHCR]
-    R -->|Pulls Image| GR
-    
-    A[Admin] -->|Manages| J
-    A -->|Accesses| D
-    
-    AZ[Azure Pipelines] -->|Alternative CI| GH
-    AZ -->|Pushes Images| DH[Docker Hub]
-    
-    classDef service fill:#4c7aaf,color:white
-    classDef infra fill:#8fbcbb
-    classDef external fill:#e6e9f0
-    
-    class T,J,R,W1,W2,D service
-    class GH,GR,DH external
-    class U,A external
-```
+* Deployment triggered via Jenkins pipeline
+* Script uses `docker-compose` to pull and redeploy latest image
+* HTTPS routing handled by Traefik
+* Script:
+
+  * [deploy-radio.sh](https://github.com/sirpaulx/GEMS-TEST/blob/main/5-app-deployment/deploy-radio.sh)
 
 ---
 
-## 🔐 Credential/Secret Strategy
+## Architecture Diagram
 
-### Mocked Secret Management
-
-```mermaid
-graph LR
-    S[Secrets] --> J[Jenkins Credential Store]
-    S --> A[Azure Pipelines]
-    S --> T[Traefik Config]
-    
-    J --> P1[GHCR_TOKEN: ghp_mocktoken12345]
-    J --> P2[VM_SSH_KEY: mock-ssh-private-key]
-    A --> P3[DOCKERHUB_PASS: mockpassword123]
-    T --> P4[BASIC_AUTH_HASH: $2y$...mockhash]
-```
-
-### Security Practices:
-- Secrets stored in encrypted credential stores
-- Principle of least privilege applied
-- Temporary access tokens used where possible
-- Sensitive files secured with proper permissions (600)
-- Credentials never committed to source control
+To be provided separately as `diagram/`.
 
 ---
 
-## 🚀 Improvements with More Time
+## Credential/Secret Strategy (Mocked)
 
-```mermaid
-graph TB
-    I[Improvements] --> K8s[Kubernetes Cluster]
-    I --> T[Infrastructure as Code<br>Terraform]
-    I --> V[HashiCorp Vault]
-    I --> M[Monitoring Stack]
-    I --> S[Service Mesh]
-    
-    K8s --> A[Auto-scaling]
-    T --> R[Reproducible Environments]
-    V --> C[Centralized Secrets]
-    M --> O[Performance Insights]
-    S --> L[Advanced Traffic Management]
-```
-
-### Specific Enhancements:
-1. **Security**:
-   - Implement HashiCorp Vault for secrets management
-   - Add Trivy vulnerability scanning in pipelines
-   - Enable mutual TLS between services
-   - Set up WAF rules in Traefik
-
-2. **CI/CD**:
-   - Implement blue/green deployments
-   - Add automated rollback mechanism
-   - Create performance testing stage
-   - Integrate chaos engineering tests
-
-3. **Infrastructure**:
-   - Migrate to Kubernetes cluster
-   - Implement Terraform for infrastructure as code
-   - Set up Prometheus/Grafana monitoring
-   - Configure centralized logging with ELK stack
-
-4. **Application**:
-   - Add health check endpoints
-   - Implement feature flags
-   - Set up client-side error monitoring
-   - Add CI/CD pipeline for infrastructure changes
+| Use Case                   | Tool                | Key/Secret                       | Where Stored                 |
+| -------------------------- | ------------------- | -------------------------------- | ---------------------------- |
+| Jenkins -> Docker Hub      | Jenkins Credentials | `DOCKER_USER`, `DOCKER_PASSWORD` | Jenkins > Manage Credentials |
+| Azure DevOps -> Docker Hub | Secret Variables    | `DOCKER_USER`, `DOCKER_PASSWORD` | Azure Pipeline > Library     |
+| HTTPS Certs                | Traefik + ACME      | auto-generated                   | `acme.json` (600 permission) |
+| Basic Auth (Traefik)       | Middleware          | `paul:$2y$...`                   | `dynamic.yml`                |
 
 ---
 
-## 📸 Verification Screenshots
-1. Traefik Dashboard:  
-   ![Traefik Dashboard](screenshots/traefik-dashboard.png)
-2. Radio App via HTTPS:  
-   ![Radio App](screenshots/radio-app-https.png)
-3. Jenkins Pipeline:  
-   ![Jenkins Pipeline](screenshots/jenkins-pipeline.png)
-4. Azure Pipeline:  
-   ![Azure Pipeline](screenshots/azure-pipeline.png)
+## Improvements with More Time
+
+* Add automated integration testing (e.g., Postman, REST Assured)
+* Use HashiCorp Vault or Azure Key Vault for secret management
+* Monitor metrics with Prometheus + Grafana
+* Implement Blue-Green or Canary deployments with Traefik labels
+* Automate provisioning with Terraform or Bicep
+* Add GitHub Actions as backup CI/CD pipeline
+* Include container security scanning (e.g., Trivy or Anchore)
 
 ---
 
-## 💎 Conclusion
-This implementation demonstrates a comprehensive DevOps environment meeting all test requirements while following industry best practices. The solution prioritizes security, reproducibility, and automation at every layer.
-
-**Key Statistics**:
-- Setup Time: ~2 hours
-- Estimated Monthly Cost: <$10 (Azure free tier)
-- Components: 6 services across 5 containers
-- Automation: 95% of setup scripted
-
-For questions or issues: [sirpaulx@gmail.com](mailto:sirpaulx@gmail.com)  
-Repository: [github.com/sirpaulx/devops-test](https://github.com/sirpaulx/devops-test)
+> Maintained by Oni Paul · [sirpaulx@gmail.com](mailto:sirpaulx@gmail.com) · [https://pauldevops.duckdns.org](https://pauldevops.duckdns.org)
