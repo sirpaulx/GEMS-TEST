@@ -1,0 +1,61 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1f36', 'edgeLabelBackground':'#f8f9fa'}}}%%
+graph TD
+    %% Define nodes
+    A[End User]
+    B[Traefik Reverse Proxy\nhttps://traefik.pauldevops.duckdns.org]
+    C[Jenkins CI/CD Server\nhttps://jenkins.pauldevops.duckdns.org]
+    D[Radio Application\nhttps://radio.pauldevops.duckdns.org]
+    E[whoami Service\nhttps://app1.pauldevops.duckdns.org]
+    F[Secure whoami Service\nhttps://secure.pauldevops.duckdns.org]
+    G[GitHub a]
+    H[GitHub Container Registry]
+    I[Azure VM\nUbuntu 22.04]
+    J[Azure Pipelines]
+    K[Local Storage]
+    L[Admin User]
+    
+    %% Define relationships
+    A -->|HTTPS Requests| B
+    B -->|Routes Traffic| C
+    B -->|Routes Traffic| D
+    B -->|Routes Traffic| E
+    B -->|Routes Traffic| F
+    
+    subgraph "Azure Cloud Environment"
+        I -->|Runs| B
+        I -->|Runs| C
+        I -->|Runs| D
+        I -->|Runs| E
+        I -->|Runs| F
+        I -->|Stores Data| K
+    end
+    
+    C -->|Pulls Code| G
+    C -->|Builds/Pushes Images| H
+    D -->|Pulls Runtime Image| H
+    
+    J -->|Alternative CI Pipeline| G
+    J -->|Pushes Images| H
+    
+    L -->|Manages| C
+    L -->|Accesses| B
+    L -->|Configures| J
+    
+    %% Security Components
+    S1[UFW Firewall] -.->|Ports 80/443| I
+    S2[Let's Encrypt] ===>|SSL Certificates| B
+    S3[SSH Key Auth] ===>|Secure Access| L
+    S4[Docker Security] ===>|Rootless Mode| I
+    
+    classDef service fill:#4c7aaf,color:white,stroke:#3a5f8d
+    classDef infra fill:#8fbcbb,stroke:#3b6978
+    classDef storage fill:#f9d5bb,stroke:#e08e79
+    classDef external fill:#e6e9f0,stroke:#d8dee9
+    classDef security fill:#f8bbd0,stroke:#d81b60
+    
+    class A,L external
+    class B,C,D,E,F service
+    class I,J infra
+    class K storage
+    class G,H external
+    class S1,S2,S3,S4 security

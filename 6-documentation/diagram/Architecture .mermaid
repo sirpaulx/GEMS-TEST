@@ -1,0 +1,27 @@
+graph TD
+    A[End User] -->|HTTPS Request| B[Traefik Reverse Proxy]
+    
+    subgraph Azure VM
+        B --> C[Jenkins CI/CD Server]
+        B --> D[Radio Application]
+        B --> E[whoami Service]
+        B --> F[Secure whoami Service]
+        B --> G[Traefik Dashboard]
+        
+        D -->|Uses| H[Docker Runtime]
+        C -->|Manages| H
+        E --> H
+        F --> H
+        G -->|Monitors| B
+    end
+    
+    C -->|Pulls Code| I[GitHub Repo]
+    C -->|Pushes Images| J[GHCR]
+    D -->|Pulls Image| J
+    H -->|Persists Data| K[Local Storage]
+    
+    L[Azure Pipelines] -->|Alternative CI| I
+    L -->|Pushes Images| J
+    
+    M[Admin] -->|Manages| C
+    M -->|Accesses| G

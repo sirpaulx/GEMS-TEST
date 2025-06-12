@@ -1,0 +1,18 @@
+graph TB
+    subgraph Azure
+        subgraph ResourceGroup
+            subgraph VM
+                Traefik
+                Jenkins
+                RadioApp
+                whoami
+            end
+            NSG[Network Security Group]
+        end
+        VNet[Virtual Network]
+    end
+    
+    Internet --> NSG
+    NSG -->|Allow 443| Traefik
+    Traefik --> Jenkins
+    Traefik --> RadioApp

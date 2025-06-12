@@ -47,3 +47,22 @@ services:
       - "traefik.http.routers.whoami2.entrypoints=websecure"
       - "traefik.http.routers.whoami2.middlewares=auth"
       - "traefik.http.routers.whoami2.tls.certresolver=myresolver"
+
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.${DOMAIN}`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls.certresolver=myresolver"
+      - "traefik.http.routers.jenkins.middlewares=auth"
+
+volumes:
+  jenkins_home:
