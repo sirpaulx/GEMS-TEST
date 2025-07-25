@@ -20,7 +20,7 @@ providers:
 certificatesResolvers:
   myresolver:
     acme:
-      email: sirpaulx@gmail.com
+      email: 
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
